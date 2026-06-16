@@ -40,7 +40,15 @@ document.addEventListener('DOMContentLoaded', () => {
         charCount: document.getElementById('char-count'),
         progressCircle: document.getElementById('progress-circle'),
         previewTitle: document.getElementById('preview-title'),
-        previewDesc: document.getElementById('preview-desc')
+        previewDesc: document.getElementById('preview-desc'),
+
+        // Theme Switch
+        themeCheckbox: document.getElementById('theme-checkbox'),
+        moonIcon: document.querySelector('.icon-theme-moon'),
+        sunIcon: document.querySelector('.icon-theme-sun'),
+
+        // Export CSV
+        exportCsvBtn: document.getElementById('export-csv-btn')
     };
 
     // Constant for progress ring circumference (2 * pi * r) where r = 10
@@ -48,12 +56,15 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.progressCircle.style.strokeDasharray = CIRCUMFERENCE;
 
     // Initial load
+    initTheme();
     fetchReleaseNotes();
 
     // Event Listeners
     elements.refreshBtn.addEventListener('click', () => refreshReleaseNotes());
     elements.retryBtn.addEventListener('click', () => fetchReleaseNotes());
     elements.resetFiltersBtn.addEventListener('click', resetFilters);
+    elements.themeCheckbox.addEventListener('change', toggleTheme);
+    elements.exportCsvBtn.addEventListener('click', exportToCSV);
     
     // Search input
     elements.searchInput.addEventListener('input', (e) => {
@@ -339,12 +350,21 @@ document.addEventListener('DOMContentLoaded', () => {
                             <i class="fa-solid fa-arrow-up-right-from-square"></i> Docs Link
                         </a>
                     ` : '<span></span>'}
-                    <button class="action-btn-share" data-id="${item.id}">
-                        <i class="fa-brands fa-x-twitter"></i> Select & Tweet
-                    </button>
+                    <div class="card-actions">
+                        <button class="action-btn-copy" data-id="${item.id}">
+                            <i class="fa-regular fa-copy"></i> Copy
+                        </button>
+                        <button class="action-btn-share" data-id="${item.id}">
+                            <i class="fa-brands fa-x-twitter"></i> Select & Tweet
+                        </button>
+                    </div>
                 </div>
             `;
             
+            // Event listener for copy button
+            const copyBtn = card.querySelector('.action-btn-copy');
+            copyBtn.addEventListener('click', () => copyToClipboard(item, copyBtn));
+
             // Event listener for tweet sharing
             const shareBtn = card.querySelector('.action-btn-share');
             shareBtn.addEventListener('click', () => openTweetModal(item));
@@ -477,5 +497,128 @@ document.addEventListener('DOMContentLoaded', () => {
         
         window.open(twitterIntentUrl, '_blank', 'noopener,noreferrer');
         closeTweetModal();
+    }
+
+    /**
+     * Initializes theme from localStorage preference.
+     */
+    function initTheme() {
+        const savedTheme = localStorage.getItem('theme') || 'dark';
+        if (savedTheme === 'light') {
+            document.body.classList.add('light-mode');
+            elements.themeCheckbox.checked = true;
+            elements.sunIcon.classList.add('active');
+            elements.moonIcon.classList.remove('active');
+        } else {
+            document.body.classList.remove('light-mode');
+            elements.themeCheckbox.checked = false;
+            elements.moonIcon.classList.add('active');
+            elements.sunIcon.classList.remove('active');
+        }
+    }
+
+    /**
+     * Toggles theme and saves preference in localStorage.
+     */
+    function toggleTheme() {
+        if (elements.themeCheckbox.checked) {
+            document.body.classList.add('light-mode');
+            localStorage.setItem('theme', 'light');
+            elements.sunIcon.classList.add('active');
+            elements.moonIcon.classList.remove('active');
+        } else {
+            document.body.classList.remove('light-mode');
+            localStorage.setItem('theme', 'dark');
+            elements.moonIcon.classList.add('active');
+            elements.sunIcon.classList.remove('active');
+        }
+    }
+
+    /**
+     * Copies plain text of a release update to user clipboard.
+     */
+    async function copyToClipboard(item, btn) {
+        const textToCopy = `Google Cloud BigQuery Update (${item.date})\n[${item.type.toUpperCase()}]\n\n${item.text_content}\n\nRead more: ${item.link || 'https://cloud.google.com/bigquery/docs/release-notes'}`;
+        
+        try {
+            await navigator.clipboard.writeText(textToCopy);
+            
+            // Visual feedback
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = `<i class="fa-solid fa-check" style="color: #34d399;"></i> Copied!`;
+            btn.classList.add('copied');
+            
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+                btn.classList.remove('copied');
+            }, 1500);
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+            alert('Failed to copy to clipboard.');
+        }
+    }
+
+    /**
+     * Exports the currently filtered release notes to a CSV file.
+     */
+    function exportToCSV() {
+        const filtered = getFilteredNotes();
+        if (filtered.length === 0) {
+            alert('No release notes to export.');
+            return;
+        }
+
+        // CSV headers
+        const headers = ['Date', 'Type', 'Link', 'Content'];
+        
+        // Convert rows to CSV strings
+        const csvRows = [
+            headers.join(',') // Add header row
+        ];
+        
+        filtered.forEach(item => {
+            const row = [
+                escapeCSVField(item.date),
+                escapeCSVField(item.type),
+                escapeCSVField(item.link || ''),
+                escapeCSVField(item.text_content)
+            ];
+            csvRows.push(row.join(','));
+        });
+        
+        // Create a blob and download it
+        const csvContent = "\uFEFF" + csvRows.join('\r\n'); // Add UTF-8 BOM for Excel formatting
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        
+        const link = document.createElement('a');
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            
+            // Format filename with current date or filter type
+            const dateStr = new Date().toISOString().slice(0, 10);
+            const filterStr = activeFilter !== 'all' ? `_${activeFilter}` : '';
+            link.setAttribute('download', `bigquery_release_notes_${dateStr}${filterStr}.csv`);
+            
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    }
+
+    /**
+     * Escapes fields for CSV format. Wraps in quotes and escapes internal double-quotes.
+     */
+    function escapeCSVField(val) {
+        if (val === null || val === undefined) return '""';
+        let str = String(val).trim();
+        // Replace internal double quotes with two double quotes
+        str = str.replace(/"/g, '""');
+        // Wrap in double quotes if it contains comma, double quote, newline, or carriage return
+        if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+            str = `"${str}"`;
+        }
+        return str;
     }
 });

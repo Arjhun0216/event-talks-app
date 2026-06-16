@@ -39,10 +39,22 @@
             </div>
 
             <div class="header-controls">
+                <div class="theme-switch-container">
+                    <i class="fa-solid fa-moon icon-theme-moon" title="Dark Mode"></i>
+                    <label class="theme-switch" for="theme-checkbox">
+                        <input type="checkbox" id="theme-checkbox" />
+                        <span class="slider round"></span>
+                    </label>
+                    <i class="fa-solid fa-sun icon-theme-sun" title="Light Mode"></i>
+                </div>
                 <div class="status-indicator">
                     <span class="pulse-dot"></span>
                     <span id="sync-status">Syncing...</span>
                 </div>
+                <button id="export-csv-btn" class="btn btn-secondary" title="Export Current View to CSV">
+                    <i class="fa-solid fa-file-csv"></i>
+                    <span>Export CSV</span>
+                </button>
                 <button id="refresh-btn" class="btn btn-secondary" title="Refresh Release Notes">
                     <i class="fa-solid fa-rotate" id="refresh-icon"></i>
                     <span>Refresh</span>
